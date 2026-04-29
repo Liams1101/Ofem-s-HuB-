@@ -1,0 +1,232 @@
+<!DOCTYPE html><html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Knowledge Hub Pro</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #1e293b;
+      --text: #e2e8f0;
+      --accent: #38bdf8;
+      --muted: #94a3b8;
+    }body.light {
+  --bg: #f8fafc;
+  --card: #ffffff;
+  --text: #0f172a;
+  --accent: #2563eb;
+  --muted: #64748b;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, Arial; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  transition: background 0.3s ease, color 0.3s ease;
+}
+
+header {
+  padding: 1rem;
+  text-align: center;
+  font-size: 1.8rem;
+  font-weight: bold;
+  background: linear-gradient(90deg, #0ea5e9, #6366f1);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+}
+
+.toolbar {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  padding: 1rem;
+  flex-wrap: wrap;
+}
+
+.search-container {
+  display: flex;
+  gap: 0.5rem;
+  width: 100%;
+  max-width: 600px;
+}
+
+input {
+  flex: 1;
+  padding: 0.8rem;
+  border-radius: 8px;
+  border: none;
+  outline: none;
+  font-size: 1rem;
+}
+
+button {
+  padding: 0.8rem 1.2rem;
+  border: none;
+  border-radius: 8px;
+  background: var(--accent);
+  color: white;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+button:hover { transform: translateY(-2px); box-shadow: 0 6px 15px rgba(0,0,0,0.2); }
+
+.results {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1rem;
+  padding: 2rem;
+}
+
+.card {
+  background: var(--card);
+  padding: 1rem;
+  border-radius: 12px;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+  transition: 0.3s;
+}
+
+.card:hover { transform: translateY(-5px); }
+
+.suggestions {
+  position: absolute;
+  background: var(--card);
+  width: 100%;
+  border-radius: 8px;
+  margin-top: 5px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+  z-index: 10;
+}
+
+.suggestion-item {
+  padding: 0.5rem;
+  cursor: pointer;
+}
+
+.suggestion-item:hover, .suggestion-item.active {
+  background: var(--accent);
+  color: white;
+}
+
+.skeleton {
+  height: 100px;
+  border-radius: 12px;
+  background: linear-gradient(90deg, #1e293b 25%, #334155 50%, #1e293b 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+footer {
+  margin-top: auto;
+  text-align: center;
+  padding: 1rem;
+  font-size: 0.9rem;
+  opacity: 0.7;
+}
+
+  </style>
+</head>
+<body><header>🌐 Knowledge Hub Pro</header><div class="toolbar">
+  <div class="search-container" role="search">
+    <input id="searchInput" aria-label="Search anything" placeholder="Search anything..." />
+    <button onclick="Controller.search()">Search</button>
+    <div id="suggestions" class="suggestions" role="listbox"></div>
+  </div>
+  <button onclick="Controller.toggleTheme()">Toggle Mode</button>
+</div><div id="results" class="results" aria-live="polite"></div><footer>Multi-API Intelligent Engine</footer><script>
+
+const State = {
+  history: JSON.parse(localStorage.getItem('history') || '[]'),
+  suggestions: [],
+  selectedIndex: -1
+};
+
+const API = {
+  async wiki(query) {
+    const res = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${query}`);
+    return res.json();
+  },
+
+  async dictionary(query) {
+    const res = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${query}`);
+    return res.json();
+  }
+};
+
+const UI = {
+  showSkeleton() {
+    const results = document.getElementById('results');
+    results.innerHTML = '<div class="skeleton"></div><div class="skeleton"></div>';
+  },
+
+  renderResults(data) {
+    const results = document.getElementById('results');
+    results.innerHTML = data;
+  },
+
+  renderSuggestions(list) {
+    const box = document.getElementById('suggestions');
+    box.innerHTML = list.map((s, i) => `<div class="suggestion-item ${i===State.selectedIndex?'active':''}">${s}</div>`).join('');
+  }
+};
+
+const Controller = {
+  async search() {
+    const query = document.getElementById('searchInput').value;
+    if (!query) return;
+
+    UI.showSkeleton();
+    State.history.unshift(query);
+    localStorage.setItem('history', JSON.stringify(State.history));
+
+    let html = '';
+
+    try {
+      const wiki = await API.wiki(query);
+      html += `<div class='card'><h3>${wiki.title}</h3><p>${wiki.extract}</p></div>`;
+    } catch {}
+
+    try {
+      const dict = await API.dictionary(query);
+      if (Array.isArray(dict)) {
+        html += `<div class='card'><h3>Definition</h3><p>${dict[0].meanings[0].definitions[0].definition}</p></div>`;
+      }
+    } catch {}
+
+    UI.renderResults(html || '<p>No results found</p>');
+  },
+
+  handleInput(e) {
+    const val = e.target.value;
+    State.suggestions = State.history.filter(h => h.startsWith(val)).slice(0,5);
+    UI.renderSuggestions(State.suggestions);
+  },
+
+  handleKey(e) {
+    if (e.key === 'ArrowDown') State.selectedIndex++;
+    if (e.key === 'ArrowUp') State.selectedIndex--;
+    if (e.key === 'Enter' && State.suggestions[State.selectedIndex]) {
+      document.getElementById('searchInput').value = State.suggestions[State.selectedIndex];
+      this.search();
+    }
+    UI.renderSuggestions(State.suggestions);
+  },
+
+  toggleTheme() {
+    document.body.classList.toggle('light');
+  }
+};
+
+document.getElementById('searchInput').addEventListener('input', Controller.handleInput);
+document.getElementById('searchInput').addEventListener('keydown', Controller.handleKey);
+
+</script></body>
+</html>
